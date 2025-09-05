@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario - Gráficos</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        .container { width: 80%; margin: auto; }
+        .charts { display: flex; justify-content: space-evenly; flex-wrap: wrap; margin-top: 20px; }
+        canvas { width: 100% !important; height: 350px !important; max-width: 500px; }
+        label, select, button { margin-top: 10px; display: block; }
+        .upload-section { margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h2>Inventario - Análisis de Equipos</h2>
+
+    <div class="upload-section">
+        <input type="file" id="fileInput">
+        <button onclick="subirArchivo()">Subir Archivo</button>
+    </div>
+
+    <label for="delegacion">Selecciona una Delegación:</label>
+    <select id="delegacion">
+        <option value="">Todos</option>
+    </select>
+    <button onclick="descargarDatos()">Descargar Datos</button>
+
+    <div class="charts">
+        <canvas id="estadoChart"></canvas>
+        <canvas id="ubicacionChart"></canvas>
+        <canvas id="destinoChart"></canvas>
+    </div>
+
+    <script>
+        let estadoChart = null;
+        let ubicacionChart = null;
+        let destinoChart = null;
+
+        async function subirArchivo() {
+            const input = document.getElementById('fileInput');
+            const archivo = input.files[0];
+            if (!archivo) {
+                alert("Selecciona un archivo para subir.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("archivo", archivo);
+
+            try {
+                const response = await fetch('/subir', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                alert(data.mensaje || data.error);
+                cargarDelegaciones();
+            } catch (error) {
+                console.error('Error subiendo archivo:', error);
+            }
+        }
+
+        async function cargarDelegaciones() {
+            try {
+                const response = await fetch('/delegaciones');
+                const delegaciones = await response.json();
+                const select = document.getElementById('delegacion');
+                select.innerHTML = '<option value="">Todos</option>';
+                delegaciones.forEach(deleg => {
+                    const option = document.createElement('option');
+                    option.value = deleg;
+                    option.textContent = deleg;
+                    select.appendChild(option);
+                });
+                cargarEstado();
+                cargarUbicacion();
+                cargarDestino();
+            } catch (error) {
+                console.error('Error cargando delegaciones:', error);
+            }
+        }
+
+        async function cargarEstado() {
+            const delegacion = document.getElementById('delegacion').value;
+            try {
+                const response = await fetch(`/estado?delegacion=${delegacion}`);
+                const data = await response.json();
+
+                if (estadoChart) estadoChart.destroy();
+                const ctx = document.getElementById('estadoChart').getContext('2d');
+
+                estadoChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Pendiente de Revisar', 'Operativo', 'Nuevo'],
+                        datasets: [{
+                            label: 'Cantidad',
+                            data: [data['Pendiente de Revisar'], data['Operativo'], data['Nuevo']],
+                            backgroundColor: ['blue', 'green', 'orange']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            title: { display: true, text: 'Estado de Equipos', font: { size: 16 } }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error cargando gráficos:', error);
+            }
+        }
+
+        async function cargarUbicacion() {
+            const delegacion = document.getElementById('delegacion').value;
+            try {
+                const response = await fetch(`/ubicacion?delegacion=${delegacion}`);
+                const data = await response.json();
+
+                if (ubicacionChart) ubicacionChart.destroy();
+                const ctx = document.getElementById('ubicacionChart').getContext('2d');
+
+                ubicacionChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(data),
+                        datasets: [{
+                            data: Object.values(data),
+                            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: true, text: 'Ubicaciones por Delegación', font: { size: 16 } }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error cargando gráficos de ubicación:', error);
+            }
+        }
+
+        async function cargarDestino() {
+            const delegacion = document.getElementById('delegacion').value;
+            try {
+                const response = await fetch(`/destino?delegacion=${delegacion}`);
+                const data = await response.json();
+
+                if (destinoChart) destinoChart.destroy();
+                const ctx = document.getElementById('destinoChart').getContext('2d');
+
+                destinoChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(data),
+                        datasets: [{
+                            label: 'Cantidad',
+                            data: Object.values(data),
+                            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: { display: true, text: 'Destino de Expedición', font: { size: 16 } }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error cargando gráficos de destino:', error);
+            }
+        }
+
+        async function descargarDatos() {
+            const delegacion = document.getElementById('delegacion').value;
+            window.location.href = `/descargar?delegacion=${delegacion}`;
+        }
+
+        document.getElementById('delegacion').addEventListener('change', () => {
+            cargarEstado();
+            cargarUbicacion();
+            cargarDestino();
+        });
+
+        cargarDelegaciones();
+    </script>
+
+</body>
+</html>
